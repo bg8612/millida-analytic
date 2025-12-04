@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analyst Report Tool: Final v2.0</title>
+    <!-- Стили UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Парсер CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- Генератор Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <!-- Сохранение файлов -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        .drag-active {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+            transform: scale(1.01);
+        }
+        .loader {
+            border-top-color: #1e293b;
+            -webkit-animation: spinner 1s linear infinite;
+            animation: spinner 1s linear infinite;
+        }
+        @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- Основной контейнер -->
+    <div class="max-w-3xl w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
+        
+        <!-- Шапка -->
+        <div class="bg-slate-900 p-8 text-white relative overflow-hidden">
+            <div class="relative z-10">
+                <h1 class="text-3xl font-bold mb-2 flex items-center gap-3">
+                    <svg class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    Millida Конвертер
+                </h1>
+                <p class="text-slate-400 opacity-90">Генерация Excel с системным дизайном. by a.nikitin</p>
+            </div>
+            <!-- Декоративный элемент -->
+            <div class="absolute top-0 right-0 -mt-6 -mr-6 w-32 h-32 bg-white opacity-10 rounded-full blur-3xl"></div>
+        </div>
+
+        <div class="p-8">
+            <!-- Зона Drag & Drop -->
+            <div id="drop-zone" class="relative border-2 border-dashed border-slate-300 rounded-xl p-10 text-center cursor-pointer transition-all duration-300 group hover:border-blue-600 hover:bg-slate-50">
+                <input type="file" id="file-input" accept=".csv" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                
+                <div class="flex flex-col items-center justify-center space-y-3 pointer-events-none">
+                    <div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                    </div>
+                    <div>
+                        <p class="text-lg font-bold text-slate-700">Перетащите CSV файл сюда</p>
+                        <p class="text-sm text-slate-500 mt-1">или нажмите для выбора файла</p>
+                    </div>
+                    <div id="file-info" class="hidden mt-3 px-4 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold shadow-sm"></div>
+                </div>
+            </div>
+
+            <!-- Блок Настроек -->
+            <div class="mt-8 bg-slate-50 rounded-xl p-6 border border-slate-100 flex flex-col sm:flex-row gap-8 shadow-inner">
+                
+                <!-- Настройка 1 -->
+                <label class="flex items-start space-x-3 cursor-pointer group select-none">
+                    <input type="checkbox" id="filter-zeros" checked class="mt-1 h-5 w-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-offset-0">
+                    <div>
+                        <span class="block text-sm font-bold text-slate-700 group-hover:text-blue-600 transition-colors">Фильтрация "пустых"</span>
+                        <p class="text-xs text-slate-500 mt-1">Исключает строки с 0 руб. и 0 часов (Нет активности)</p>
+                    </div>
+                </label>
+
+                <!-- Настройка 2 -->
+                <label class="flex items-start space-x-3 cursor-pointer group select-none">
+                    <input type="checkbox" id="show-comments" checked class="mt-1 h-5 w-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-offset-0">
+                    <div>
+                        <span class="block text-sm font-bold text-slate-700 group-hover:text-blue-600 transition-colors">Включить комментарии</span>
+                        <p class="text-xs text-slate-500 mt-1">Добавляет широкий столбец с описанием задач</p>
+                    </div>
+                </label>
+
+            </div>
+
+            <!-- Главная кнопка -->
+            <button id="process-btn" class="w-full mt-8 bg-slate-900 hover:bg-black text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transform transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3" disabled>
+                <span>Сформировать отчет Excel</span>
+            </button>
+            
+            <!-- Индикаторы состояния -->
+            <div id="loading-indicator" class="hidden flex justify-center mt-6">
+                <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-8 w-8"></div>
+            </div>
+            
+            <p id="error-msg" class="hidden mt-4 text-center text-red-500 text-sm font-bold bg-red-50 p-3 rounded-lg"></p>
+        </div>
+    </div>
+
+    <!-- Футер -->
+    <p class="mt-6 text-slate-400 text-xs text-center">
+        Обработка данных происходит локально в браузере.<br>
+        Данные не отправляются на сервер.
+    </p>
+
+<script>
+    // --- Инициализация ---
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const processBtn = document.getElementById('process-btn');
+    const fileInfo = document.getElementById('file-info');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const errorMsg = document.getElementById('error-msg');
+    let currentFile = null;
+
+    // --- Обработчики Drag & Drop ---
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => {
+        dropZone.addEventListener(e, (evt) => {
+            evt.preventDefault();
+            if(e === 'drop') dropZone.classList.remove('drag-active');
+            else if(e !== 'dragleave') dropZone.classList.add('drag-active');
+        });
+    });
+
+    dropZone.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
+    fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+    function handleFiles(files) {
+        errorMsg.classList.add('hidden');
+        if (files.length > 0 && (files[0].name.toLowerCase().endsWith('.csv') || files[0].type.includes('csv'))) {
+            currentFile = files[0];
+            fileInfo.textContent = `Файл: ${currentFile.name}`;
+            fileInfo.classList.remove('hidden');
+            processBtn.disabled = false;
+        } else {
+            showError("Ошибка формата: Пожалуйста, загрузите файл с расширением .csv");
+        }
+    }
+
+    function showError(msg) {
+        errorMsg.textContent = msg;
+        errorMsg.classList.remove('hidden');
+    }
+
+    // --- Основной процесс ---
+    processBtn.addEventListener('click', () => {
+        if (!currentFile) return;
+        
+        // Блокировка UI
+        processBtn.disabled = true;
+        processBtn.classList.add('opacity-75');
+        loadingIndicator.classList.remove('hidden');
+        errorMsg.classList.add('hidden');
+
+        Papa.parse(currentFile, {
+            delimiter: ";", // Важно для Excel CSV
+            header: true,
+            skipEmptyLines: true,
+            encoding: "UTF-8",
+            complete: (results) => {
+                // Имитация асинхронности для отрисовки лоадера
+                setTimeout(() => {
+                    generateFinalExcel(results.data)
+                        .then(() => {
+                            // Успех
+                            processBtn.disabled = false;
+                            processBtn.classList.remove('opacity-75');
+                            loadingIndicator.classList.add('hidden');
+                        })
+                        .catch(err => {
+                            console.error(err);
+                            showError("Ошибка генерации: " + err.message);
+                            processBtn.disabled = false;
+                            loadingIndicator.classList.add('hidden');
+                        });
+                }, 150);
+            },
+            error: (err) => {
+                showError("Ошибка чтения CSV: " + err.message);
+                processBtn.disabled = false;
+                loadingIndicator.classList.add('hidden');
+            }
+        });
+    });
+
+    // --- Логика генерации Excel (V2.0 Core) ---
+    async function generateFinalExcel(rawData) {
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('Отчет активность', {
+            views: [{ state: 'frozen', ySplit: 1 }] // Закрепление шапки
+        });
+
+        const filterEnabled = document.getElementById('filter-zeros').checked;
+        const showComments = document.getElementById('show-comments').checked;
+
+        // 1. Парсинг и Нормализация данных
+        let rows = rawData.map(item => {
+            // Безопасный парсинг денег: "1 200,50" -> 1200.50
+            const parseMoney = (val) => parseFloat((val || "0").replace(/\s/g, '').replace(',', '.')) || 0;
+            // Безопасный парсинг часов: "12,5" -> 12.5
+            const parseHours = (val) => parseFloat((val || "0").replace(',', '.')) || 0;
+
+            return {
+                name: item['Имя'] || "Без имени",
+                workType: item['Тип работы'] || "Не указано",
+                date: item['Дата создания'] ? new Date(item['Дата создания']) : null,
+                timeStr: item['Общее время'] || "00:00:00",
+                hours: parseHours(item['Математическое время (часы)']),
+                rate: parseMoney(item['Ставка (руб/час)']),
+                salary: parseMoney(item['Зарплата (руб)']),
+                comment: item['Комментарий'] || ""
+            };
+        });
+
+        // 2. Применение фильтра
+        if (filterEnabled) {
+            rows = rows.filter(r => {
+                const hasValue = r.salary !== 0 || r.hours !== 0;
+                const isNotAfkLabel = !r.workType.toLowerCase().includes('нет активности');
+                return hasValue && isNotAfkLabel;
+            });
+        }
+
+        // 3. Конфигурация колонок (Ширина + Ключи)
+        let columnsConfig = [
+            { header: 'Сотрудник', key: 'name', width: 30 },
+            { header: 'Тип работы', key: 'workType', width: 100 }, // Широкий, как просили
+            { header: 'Дата', key: 'date', width: 12 },
+            { header: 'Время', key: 'timeStr', width: 14 },
+            { header: 'Часы (dec)', key: 'hours', width: 12 },
+            { header: 'Ставка', key: 'rate', width: 12 },
+            { header: 'Зарплата', key: 'salary', width: 18 }
+        ];
+
+        if (showComments) {
+            columnsConfig.push({ header: 'Комментарий', key: 'comment', width: 250 }); // Макс. ширина для Excel
+        }
+
+        ws.columns = columnsConfig;
+
+        // 4. Стилизация Шапки
+        const headerRow = ws.getRow(1);
+        headerRow.height = 35;
+        headerRow.eachCell(cell => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } }; // Slate 800
+            cell.font = { color: { argb: 'FFFFFFFF' }, bold: true, size: 11, name: 'Segoe UI' };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.border = { 
+                top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'medium' }, right: { style: 'thin' } 
+            };
+        });
+
+        // Переменные для ручного подсчета итогов
+        let totalSumSalary = 0;
+        let totalSumHours = 0;
+
+        // 5. Заполнение строк данными
+        rows.forEach((dataRow, index) => {
+            const row = ws.addRow(dataRow);
+            
+            // Накопление итогов
+            totalSumSalary += dataRow.salary;
+            totalSumHours += dataRow.hours;
+            
+            // Базовая стилизация ячейки
+            row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                cell.font = { name: 'Segoe UI', size: 10, color: { argb: 'FF334155' } };
+                
+                // Полная сетка границ
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                    left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                    bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+                    right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+                };
+                
+                // Умное выравнивание
+                const colKey = ws.columns[colNumber - 1].key;
+                if (colKey === 'workType' || colKey === 'comment') { 
+                    cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+                } else if (colKey === 'name') {
+                    cell.alignment = { vertical: 'middle', horizontal: 'left' };
+                } else {
+                    cell.alignment = { vertical: 'middle', horizontal: 'right' };
+                }
+            });
+
+            // Эффект "Зебра"
+            if (index % 2 !== 0) {
+                row.eachCell({ includeEmpty: true }, cell => {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+                });
+            }
+
+            // Условное форматирование (AFK / 0 руб)
+            if (dataRow.workType.toLowerCase().includes('afk') || dataRow.salary === 0) {
+                const greyColor = { argb: 'FF94A3B8' };
+                row.getCell('workType').font = { color: greyColor, italic: true };
+                if (row.getCell('salary')) row.getCell('salary').font = { color: greyColor };
+            }
+
+            // Форматы данных
+            row.getCell('date').numFmt = 'dd.mm.yyyy';
+            row.getCell('rate').numFmt = '#,##0.00 "₽"';
+            row.getCell('salary').numFmt = '#,##0.00 "₽"';
+            row.getCell('hours').numFmt = '0.00';
+
+            // Фиксированная высота для компактности при длинных комментариях
+            row.height = 25; 
+        });
+
+        // 6. Генерация строки ИТОГОВ
+        if (rows.length > 0) {
+            const totalRowIdx = rows.length + 2;
+            const totalRow = ws.getRow(totalRowIdx);
+            
+            const hoursColLetter = ws.getColumn('hours').letter;
+            const salaryColLetter = ws.getColumn('salary').letter;
+            const firstDataRow = 2;
+            const lastDataRow = totalRowIdx - 1;
+
+            // Объединение ячеек для заголовка
+            ws.mergeCells(`A${totalRowIdx}:B${totalRowIdx}`);
+            totalRow.getCell(1).value = 'ОБЩИЙ ИТОГ:';
+            
+            // Вставка формулы и значения (для мгновенного отображения)
+            totalRow.getCell('hours').value = { 
+                formula: `SUM(${hoursColLetter}${firstDataRow}:${hoursColLetter}${lastDataRow})`,
+                result: totalSumHours 
+            };
+            
+            totalRow.getCell('salary').value = { 
+                formula: `SUM(${salaryColLetter}${firstDataRow}:${salaryColLetter}${lastDataRow})`,
+                result: totalSumSalary 
+            };
+
+            // Стилизация итога
+            totalRow.height = 30;
+            totalRow.eachCell({ includeEmpty: true }, cell => {
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+                cell.font = { bold: true, size: 11, color: { argb: 'FF000000' } }; // Черный жирный
+                cell.border = { top: { style: 'double' }, bottom: { style: 'thin' } };
+                cell.alignment = { vertical: 'middle', horizontal: 'right' };
+            });
+            
+            // Выравнивание заголовка итога
+            totalRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'right' };
+            
+            // Форматы итога
+            totalRow.getCell('salary').numFmt = '#,##0.00 "₽"';
+            totalRow.getCell('hours').numFmt = '0.00';
+        }
+
+        // Автофильтр на всю таблицу
+        ws.autoFilter = { from: 'A1', to: { row: 1, column: ws.columns.length } };
+
+        // Сохранение
+        const buffer = await wb.xlsx.writeBuffer();
+        const dateStr = new Date().toLocaleDateString('ru-RU').replace(/\./g, '-');
+        saveAs(new Blob([buffer]), `Final_Report_${dateStr}.xlsx`);
+    }
+</script>
+</body>
+</html>
